@@ -36,7 +36,7 @@ def main() -> None:
     if not settings.telegram_bot_token:
         raise SystemExit("TELEGRAM_BOT_TOKEN is required. Add it to .env or the environment.")
 
-    if settings.webhook_url:
+    if settings.bot_mode == "web" or settings.webhook_url:
         from .webhook import WebhookServer
 
         WebhookServer(settings).run()

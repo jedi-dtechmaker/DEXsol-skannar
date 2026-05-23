@@ -19,9 +19,12 @@ class WebhookServer:
         self.executor = ThreadPoolExecutor(max_workers=8)
 
     def run(self) -> None:
-        webhook_url = f"{self.settings.webhook_url}{self.settings.webhook_path}"
-        self.telegram.set_webhook(webhook_url)
-        LOG.info("Webhook registered at %s", webhook_url)
+        if self.settings.webhook_url:
+            webhook_url = f"{self.settings.webhook_url}{self.settings.webhook_path}"
+            self.telegram.set_webhook(webhook_url)
+            LOG.info("Webhook registered at %s", webhook_url)
+        else:
+            LOG.warning("WEBHOOK_URL is not set; web server will run, but Telegram webhook is not registered yet.")
 
         server_ref = self
 

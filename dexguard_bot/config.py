@@ -30,6 +30,7 @@ class Settings:
     send_photos: bool = False
     send_typing: bool = False
     deep_enrichment: bool = False
+    bot_mode: str = "polling"
     webhook_url: str = ""
     webhook_path: str = "/telegram/webhook"
     port: int = 8080
@@ -47,6 +48,7 @@ def get_settings() -> Settings:
         send_photos=_bool_env("DEXGUARD_SEND_PHOTOS", False),
         send_typing=_bool_env("DEXGUARD_SEND_TYPING", False),
         deep_enrichment=_bool_env("DEXGUARD_DEEP_ENRICHMENT", False),
+        bot_mode=os.getenv("BOT_MODE", "polling").strip().lower(),
         webhook_url=os.getenv("WEBHOOK_URL", "").strip().rstrip("/"),
         webhook_path=os.getenv("WEBHOOK_PATH", "/telegram/webhook").strip() or "/telegram/webhook",
         port=int(os.getenv("PORT", "8080")),

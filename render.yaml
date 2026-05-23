@@ -14,6 +14,8 @@ services:
         sync: false
       - key: WEBHOOK_PATH
         value: /telegram/webhook
+      - key: BOT_MODE
+        value: web
       - key: DEXGUARD_DB_PATH
         value: /tmp/dexguard.sqlite3
       - key: DEXGUARD_REQUEST_TIMEOUT_SECONDS
