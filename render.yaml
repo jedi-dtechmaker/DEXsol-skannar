@@ -1,0 +1,17 @@
+services:
+  - type: worker
+    name: dexguard-bot
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python3 -m dexguard_bot"
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: SOLANA_RPC_URL
+        sync: false
+      - key: DEXGUARD_DB_PATH
+        value: /tmp/dexguard.sqlite3
+      - key: DEXGUARD_REQUEST_TIMEOUT_SECONDS
+        value: "10"
+      - key: DEXGUARD_ENRICHMENT_TIMEOUT_SECONDS
+        value: "4"
