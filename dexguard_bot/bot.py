@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from html import escape
 
 from .config import get_settings
 from .dexscreener import DexScreenerClient
@@ -22,7 +23,7 @@ from .models import OutgoingResponse
 from .providers import GeckoTerminalClient, SecurityAggregator
 from .scanner import Scanner
 from .storage import Storage
-from .telegram import TelegramClient
+from .telegram import PollingTimeout, TelegramClient
 
 
 LOG = logging.getLogger("dexguard_bot")
@@ -35,6 +36,18 @@ def main() -> None:
     if not settings.telegram_bot_token:
         raise SystemExit("TELEGRAM_BOT_TOKEN is required. Add it to .env or the environment.")
 
+    if settings.webhook_url:
+        from .webhook import WebhookServer
+
+        WebhookServer(settings).run()
+        return
+
+    telegram, scanner = build_runtime(settings)
+    LOG.info("DexGuard Bot started with long polling.")
+    run_polling(telegram, scanner)
+
+
+def build_runtime(settings):
     scanner = Scanner(
         dexscreener=DexScreenerClient(timeout=settings.request_timeout_seconds),
         holders=HolderProvider(settings.solana_rpc_url, timeout=settings.enrichment_timeout_seconds),
@@ -42,10 +55,18 @@ def main() -> None:
         security=SecurityAggregator(timeout=settings.enrichment_timeout_seconds),
         market=GeckoTerminalClient(timeout=settings.enrichment_timeout_seconds),
         storage=Storage(settings.db_path),
+        deep_enrichment=settings.deep_enrichment,
     )
-    telegram = TelegramClient(settings.telegram_bot_token, timeout=settings.request_timeout_seconds)
-    LOG.info("DexGuard Bot started with long polling.")
+    telegram = TelegramClient(
+        settings.telegram_bot_token,
+        timeout=settings.request_timeout_seconds,
+        send_photos=settings.send_photos,
+        send_typing=settings.send_typing,
+    )
+    return telegram, scanner
 
+
+def run_polling(telegram: TelegramClient, scanner: Scanner) -> None:
     offset: int | None = None
     while True:
         try:
@@ -56,6 +77,8 @@ def main() -> None:
         except KeyboardInterrupt:
             LOG.info("DexGuard Bot stopped.")
             return
+        except PollingTimeout:
+            LOG.debug("Telegram polling timed out; retrying.")
         except Exception:
             LOG.exception("Polling loop error")
             time.sleep(3)
@@ -74,12 +97,12 @@ def handle_update(update: dict, telegram: TelegramClient, scanner: Scanner) -> N
         return
 
     try:
-        if should_show_scan_action(text):
+        if telegram.send_typing and should_show_scan_action(text):
             telegram.send_chat_action(int(chat_id))
         response = route_message(text, scanner)
     except Exception as exc:
         LOG.exception("Failed to handle message")
-        response = OutgoingResponse(text=f"Scan failed: {str(exc)}")
+        response = OutgoingResponse(text=f"Scan failed: {escape(str(exc), quote=False)}")
     telegram.send_response(int(chat_id), response)
 
 
@@ -96,11 +119,10 @@ def handle_callback(callback: dict, telegram: TelegramClient, scanner: Scanner) 
 
     try:
         telegram.answer_callback_query(callback_id)
-        telegram.send_chat_action(int(chat_id))
         response = route_callback(data, scanner)
     except Exception as exc:
         LOG.exception("Failed to handle callback")
-        response = OutgoingResponse(text=f"Action failed: {str(exc)}")
+        response = OutgoingResponse(text=f"Action failed: {escape(str(exc), quote=False)}")
     telegram.send_response(int(chat_id), response)
 
 
@@ -112,17 +134,17 @@ def route_message(text: str, scanner: Scanner) -> OutgoingResponse:
         return OutgoingResponse(text=trending_message(scanner.storage.trending()))
     if command == "/scan":
         error = require_arg(arg, "/scan")
-        return OutgoingResponse(text=error) if error else scan_card(scanner.scan(arg))
+        return OutgoingResponse(text=error) if error else scan_card(scanner.quick_scan(arg))
     if command == "/lock":
         error = require_arg(arg, "/lock")
-        return OutgoingResponse(text=error) if error else OutgoingResponse(text=lock_message(scanner.scan(arg)))
+        return OutgoingResponse(text=error) if error else OutgoingResponse(text=lock_message(scanner.quick_scan(arg)))
     if command == "/flow":
         error = require_arg(arg, "/flow")
-        return OutgoingResponse(text=error) if error else OutgoingResponse(text=flow_message(scanner.scan(arg)))
+        return OutgoingResponse(text=error) if error else OutgoingResponse(text=flow_message(scanner.quick_scan(arg)))
 
     match = ADDRESS_RE.search(text)
     if match:
-        return scan_card(scanner.scan(match.group(0)))
+        return scan_card(scanner.quick_scan(match.group(0)))
     return OutgoingResponse(text=help_message())
 
 
@@ -132,12 +154,12 @@ def route_callback(data: str, scanner: Scanner) -> OutgoingResponse:
 
     action, query = parse_callback_data(data)
     if action == "details":
-        return OutgoingResponse(text=scan_message(scanner.scan(query)))
+        return OutgoingResponse(text=scan_message(scanner.deep_scan(query)))
     if action == "holders":
-        result = scanner.scan(query)
+        result = scanner.holder_scan(query)
         return OutgoingResponse(text=f"<b>Whale Signals: {result.pair.base_symbol}</b>\n{holder_text(result)}")
     if action == "risk":
-        return OutgoingResponse(text=risk_scan_message(scanner.scan(query)))
+        return OutgoingResponse(text=risk_scan_message(scanner.risk_scan(query)))
     return OutgoingResponse(text="Unknown action.")
 
 

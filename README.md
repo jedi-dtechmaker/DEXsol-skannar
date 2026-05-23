@@ -28,23 +28,31 @@ Telegram token intelligence bot for fast contract scans. It flow and follows the
 python3 -m dexguard_bot
 ```
 
-The bot uses Telegram long polling, so it does not need a public webhook URL.
+By default the bot uses Telegram long polling locally. If `WEBHOOK_URL` is set, it starts a web server and registers a Telegram webhook.
 
-## Render Deployment
+## Webhook Deployment
 
-Deploy this as a Render **Background Worker**, not a Web Service. The bot uses Telegram long polling and does not expose an HTTP port.
+Deploy this as a normal **Web Service** when your host gives you a public HTTPS URL.
 
-Render can use the included `render.yaml`, or you can configure it manually:
+The app exposes:
+
+- `GET /health` for health checks
+- `POST /telegram/webhook` for Telegram updates
+
+Use the included `render.yaml`, or configure manually:
 
 - Build command: `pip install -r requirements.txt`
 - Start command: `python3 -m dexguard_bot`
-- Service type: Background Worker
+- Service type: Web Service
+- Health check path: `/health`
 
-Set these Render environment variables:
+Set these environment variables:
 
 ```bash
 TELEGRAM_BOT_TOKEN=your-botfather-token
 SOLANA_RPC_URL=your-private-solana-rpc-url
+WEBHOOK_URL=https://your-public-service-url
+WEBHOOK_PATH=/telegram/webhook
 DEXGUARD_DB_PATH=/tmp/dexguard.sqlite3
 DEXGUARD_REQUEST_TIMEOUT_SECONDS=10
 DEXGUARD_ENRICHMENT_TIMEOUT_SECONDS=4
@@ -60,6 +68,9 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 DEXGUARD_DB_PATH=data/dexguard.sqlite3
 DEXGUARD_REQUEST_TIMEOUT_SECONDS=10
 DEXGUARD_ENRICHMENT_TIMEOUT_SECONDS=4
+WEBHOOK_URL=
+WEBHOOK_PATH=/telegram/webhook
+PORT=8080
 ```
 
 ## Scan Examples

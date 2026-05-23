@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from .http import get_json
@@ -68,10 +69,23 @@ def _score_pair(pair: dict[str, Any], token_address: str | None = None) -> tuple
 
 
 class DexScreenerClient:
-    def __init__(self, timeout: int = 15):
+    def __init__(self, timeout: int = 15, cache_ttl_seconds: int = 60):
         self.timeout = timeout
+        self.cache_ttl_seconds = cache_ttl_seconds
+        self._cache: dict[str, tuple[float, PairData]] = {}
 
     def find_best_pair(self, query: str) -> PairData:
+        cache_key = query.strip().lower()
+        cached = self._cache.get(cache_key)
+        if cached and time.monotonic() - cached[0] < self.cache_ttl_seconds:
+            return cached[1]
+
+        pair = self._find_best_pair_uncached(query)
+        self._cache[cache_key] = (time.monotonic(), pair)
+        self._cache[f"{pair.chain_id}:{pair.base_address}".lower()] = (time.monotonic(), pair)
+        return pair
+
+    def _find_best_pair_uncached(self, query: str) -> PairData:
         token_ref = parse_token_ref(query)
 
         if token_ref.chain_id:

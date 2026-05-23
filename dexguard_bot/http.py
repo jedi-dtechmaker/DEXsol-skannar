@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -11,6 +12,10 @@ class HttpError(RuntimeError):
     pass
 
 
+class ReadTimeout(HttpError):
+    pass
+
+
 def _safe_url(url: str) -> str:
     parts = urllib.parse.urlsplit(url)
     path = parts.path
@@ -18,16 +23,16 @@ def _safe_url(url: str) -> str:
         prefix, _, rest = path.partition("/bot")
         if "/" in rest:
             _, suffix = rest.split("/", 1)
-            path = f"{prefix}/bot<redacted>/{suffix}"
+            path = f"{prefix}/bot[redacted]/{suffix}"
         else:
-            path = f"{prefix}/bot<redacted>"
+            path = f"{prefix}/bot[redacted]"
     if "/v2/" in path:
         prefix, _, rest = path.partition("/v2/")
         suffix = ""
         if "/" in rest:
             _, suffix = rest.split("/", 1)
             suffix = f"/{suffix}"
-        path = f"{prefix}/v2/<redacted>{suffix}"
+        path = f"{prefix}/v2/[redacted]{suffix}"
     return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
 
 
@@ -49,7 +54,13 @@ def get_json(url: str, timeout: int = 15, params: dict[str, Any] | None = None) 
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         raise HttpError(f"GET {_safe_url(url)} failed with HTTP {exc.code}: {body[:300]}") from exc
+    except TimeoutError as exc:
+        raise ReadTimeout(f"GET {_safe_url(url)} timed out") from exc
+    except socket.timeout as exc:
+        raise ReadTimeout(f"GET {_safe_url(url)} timed out") from exc
     except urllib.error.URLError as exc:
+        if _is_timeout_reason(exc.reason):
+            raise ReadTimeout(f"GET {_safe_url(url)} timed out") from exc
         raise HttpError(f"GET {_safe_url(url)} failed: {exc.reason}") from exc
 
 
@@ -72,5 +83,19 @@ def post_json(url: str, payload: dict[str, Any], timeout: int = 15) -> Any:
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         raise HttpError(f"POST {_safe_url(url)} failed with HTTP {exc.code}: {body[:300]}") from exc
+    except TimeoutError as exc:
+        raise ReadTimeout(f"POST {_safe_url(url)} timed out") from exc
+    except socket.timeout as exc:
+        raise ReadTimeout(f"POST {_safe_url(url)} timed out") from exc
     except urllib.error.URLError as exc:
+        if _is_timeout_reason(exc.reason):
+            raise ReadTimeout(f"POST {_safe_url(url)} timed out") from exc
         raise HttpError(f"POST {_safe_url(url)} failed: {exc.reason}") from exc
+
+
+def _is_timeout_reason(reason: Any) -> bool:
+    if isinstance(reason, TimeoutError):
+        return True
+    if isinstance(reason, socket.timeout):
+        return True
+    return "timed out" in str(reason).lower()

@@ -113,3 +113,19 @@ class OutgoingResponse:
     photo_url: str | None = None
     reply_markup: dict[str, Any] | None = None
     disable_preview: bool = True
+
+
+def empty_holder_summary(note: str = "Tap Whale Signals for holder enrichment.") -> HolderSummary:
+    return HolderSummary(source="deferred", note=note)
+
+
+def empty_lock_summary(note: str = "Tap Details for liquidity-lock verification status.") -> LockSummary:
+    return LockSummary(status="unknown", provider="deferred", note=note)
+
+
+def empty_market_insight(note: str = "Tap Details for external market cross-check.") -> MarketInsight:
+    return MarketInsight(source="deferred", note=note)
+
+
+def empty_security_summary(note: str = "Tap Risk Scan for contract and trade-security checks.") -> SecuritySummary:
+    return SecuritySummary(source="deferred", note=note)

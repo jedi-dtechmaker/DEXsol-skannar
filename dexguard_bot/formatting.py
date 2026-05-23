@@ -73,47 +73,51 @@ def scan_message(result: ScanResult) -> str:
     links = social_links(pair)
     alerts = "\n".join(f"- {esc(alert)}" for alert in result.risk.alerts[:5])
 
-    return "\n".join(
-        [
-            f"🛡️ <b>DexGuard Scan: {esc(pair.base_symbol)} / {esc(pair.quote_symbol)}</b>",
-            f"{esc(pair.base_name)}",
-            f"<code>{esc(pair.base_address)}</code>",
-            "",
-            f"⚠️ <b>Risk:</b> {risk_icon(result.risk.band)} {result.risk.score}/100 ({esc(result.risk.band)})",
-            alerts,
-            "",
-            "🪙 <b>Coin Information</b>",
-            f"⛓️ Chain: <b>{esc(pair.chain_id)}</b> | DEX: <b>{esc(pair.dex_id)}</b> | Age: <b>{pair_age(pair)}</b>",
-            f"💵 Price: <b>{money(pair.price_usd)}</b>",
-            f"💰 Market Cap: <b>{money(pair.market_cap)}</b> | FDV: <b>{money(pair.fdv)}</b>",
-            f"💧 Liquidity: <b>{money(pair.liquidity_usd)}</b>",
-            f"📊 Volume 24h: <b>{money(float(pair.volume.get('h24') or 0))}</b>",
-            f"📈 Price Change: 5m {pct(pair.price_change.get('m5'))} | 1h {pct(pair.price_change.get('h1'))} | 24h {pct(pair.price_change.get('h24'))}",
-            f"🔁 Txns 5m: 🟢 {num(m5.get('buys'))} / 🔴 {num(m5.get('sells'))}",
-            f"🔁 Txns 1h: 🟢 {num(h1.get('buys'))} / 🔴 {num(h1.get('sells'))}",
-            f"🔁 Txns 24h: 🟢 {num(h24.get('buys'))} / 🔴 {num(h24.get('sells'))}",
-            f"👁️ Scan Count: <b>{result.scan_count}</b>",
-            "",
-            "🌐 <b>External Market Cross-Check</b>",
-            market_text(result),
-            "",
-            "🧪 <b>Contract & Trade Security</b>",
-            security_text(result),
-            "",
-            "🔐 <b>Liquidity Lock</b>",
-            f"Status: <b>{esc(result.lock.status.upper())}</b>",
-            f"Provider: {esc(result.lock.provider or 'n/a')}",
-            f"Note: {esc(result.lock.note or 'n/a')}",
-            "",
-            "🐋 <b>Holder Information</b>",
-            holder_text(result),
-            "",
-            "🔗 <b>Links</b>",
-            links,
-            "",
-            "<i>Informational only. Always do your own due diligence.</i>",
-        ]
+    lines = [
+        f"🛡️ <b>DexGuard Scan: {esc(pair.base_symbol)} / {esc(pair.quote_symbol)}</b>",
+        f"{esc(pair.base_name)}",
+        f"<code>{esc(pair.base_address)}</code>",
+        "",
+        f"⚠️ <b>Risk:</b> {risk_icon(result.risk.band)} {result.risk.score}/100 ({esc(result.risk.band)})",
+        alerts,
+        "",
+        "🪙 <b>Coin Information</b>",
+        f"⛓️ Chain: <b>{esc(pair.chain_id)}</b> | DEX: <b>{esc(pair.dex_id)}</b> | Age: <b>{pair_age(pair)}</b>",
+        f"💵 Price: <b>{money(pair.price_usd)}</b>",
+        f"💰 Market Cap: <b>{money(pair.market_cap)}</b> | FDV: <b>{money(pair.fdv)}</b>",
+        f"💧 Liquidity: <b>{money(pair.liquidity_usd)}</b>",
+        f"📊 Volume 24h: <b>{money(float(pair.volume.get('h24') or 0))}</b>",
+        f"📈 Price Change: 5m {pct(pair.price_change.get('m5'))} | 1h {pct(pair.price_change.get('h1'))} | 24h {pct(pair.price_change.get('h24'))}",
+        f"🔁 Txns 5m: 🟢 {num(m5.get('buys'))} / 🔴 {num(m5.get('sells'))}",
+        f"🔁 Txns 1h: 🟢 {num(h1.get('buys'))} / 🔴 {num(h1.get('sells'))}",
+        f"🔁 Txns 24h: 🟢 {num(h24.get('buys'))} / 🔴 {num(h24.get('sells'))}",
+        f"👁️ Scan Count: <b>{result.scan_count}</b>",
+    ]
+    append_section(lines, "🌐 <b>External Market Cross-Check</b>", market_text(result))
+    append_section(lines, "🧪 <b>Contract & Trade Security</b>", security_text(result))
+    append_section(lines, "🔐 <b>Liquidity Lock</b>", lock_text(result))
+    append_section(lines, "🐋 <b>Holder Information</b>", holder_text(result))
+    append_section(lines, "🔗 <b>Links</b>", links)
+    lines.extend(["", "<i>Informational only. Always do your own due diligence.</i>"])
+    return "\n".join(lines)
+
+
+def append_section(lines: list[str], title: str, body: str) -> None:
+    if not body or is_unavailable_text(body):
+        return
+    lines.extend(["", title, body])
+
+
+def is_unavailable_text(text: str) -> bool:
+    lowered = text.lower()
+    unavailable_markers = (
+        "timed out",
+        "unavailable",
+        "disabled for speed",
+        "deferred",
+        "not available",
     )
+    return any(marker in lowered for marker in unavailable_markers)
 
 
 def scan_card(result: ScanResult) -> OutgoingResponse:
@@ -168,7 +172,6 @@ def token_keyboard(result: ScanResult) -> dict[str, Any]:
             {"text": "🔥 Trending", "callback_data": "trending"},
         ],
         [
-            {"text": "🐋 Whale Signals", "callback_data": f"holders:{pair.chain_id}:{pair.base_address}"},
             {"text": "🛡️ Risk Scan", "callback_data": f"risk:{pair.chain_id}:{pair.base_address}"},
         ],
         [
@@ -300,6 +303,8 @@ def flow_message(result: ScanResult) -> str:
 
 def market_text(result: ScanResult) -> str:
     market = result.market
+    if market.source == "deferred" or is_bad_note(market.note):
+        return ""
     lines = [f"Source: {esc(market.source)}"]
     if market.pool_count is not None:
         lines.append(f"Pools found: <b>{num(market.pool_count)}</b>")
@@ -316,6 +321,8 @@ def market_text(result: ScanResult) -> str:
 
 def security_text(result: ScanResult) -> str:
     security = result.security
+    if security.source == "deferred" or is_bad_note(security.note):
+        return ""
     lines = [f"Source: {esc(security.source)}"]
     if security.is_honeypot is not None:
         lines.append(f"Honeypot: <b>{yes_no(security.is_honeypot)}</b>")
@@ -369,6 +376,8 @@ def security_controls(result: ScanResult) -> str:
 
 def holder_text(result: ScanResult) -> str:
     holders = result.holders
+    if holders.source == "deferred" or is_bad_note(holders.note):
+        return ""
     lines = [f"Source: {esc(holders.source)}"]
     if holders.total_holders is not None:
         lines.append(f"Total holders: <b>{num(holders.total_holders)}</b>")
@@ -381,6 +390,29 @@ def holder_text(result: ScanResult) -> str:
     if holders.note:
         lines.append(f"Note: {esc(holders.note)}")
     return "\n".join(lines)
+
+
+def lock_text(result: ScanResult) -> str:
+    lock = result.lock
+    if lock.provider == "deferred" or is_bad_note(lock.note):
+        return ""
+    lines = [
+        f"Status: <b>{esc(lock.status.upper())}</b>",
+        f"Provider: {esc(lock.provider or 'n/a')}",
+    ]
+    if lock.locked_percent is not None:
+        lines.append(f"Locked: <b>{pct(lock.locked_percent, signed=False)}</b>")
+    if lock.unlock_date:
+        lines.append(f"Unlock Date: <b>{esc(lock.unlock_date)}</b>")
+    if lock.note:
+        lines.append(f"Note: {esc(lock.note)}")
+    return "\n".join(lines)
+
+
+def is_bad_note(note: str | None) -> bool:
+    if not note:
+        return False
+    return is_unavailable_text(note)
 
 
 def yes_no(value: bool) -> str:

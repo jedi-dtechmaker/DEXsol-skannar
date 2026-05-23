@@ -1,17 +1,28 @@
 services:
-  - type: worker
+  - type: web
     name: dexguard-bot
     runtime: python
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python3 -m dexguard_bot"
+    healthCheckPath: /health
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SOLANA_RPC_URL
         sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: WEBHOOK_PATH
+        value: /telegram/webhook
       - key: DEXGUARD_DB_PATH
         value: /tmp/dexguard.sqlite3
       - key: DEXGUARD_REQUEST_TIMEOUT_SECONDS
-        value: "10"
+        value: "5"
       - key: DEXGUARD_ENRICHMENT_TIMEOUT_SECONDS
-        value: "4"
+        value: "2"
+      - key: DEXGUARD_SEND_PHOTOS
+        value: "false"
+      - key: DEXGUARD_SEND_TYPING
+        value: "false"
+      - key: DEXGUARD_DEEP_ENRICHMENT
+        value: "false"

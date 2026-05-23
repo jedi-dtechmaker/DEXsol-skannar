@@ -2,20 +2,30 @@ from __future__ import annotations
 
 from typing import Any
 
-from .http import get_json, post_json
+from .http import ReadTimeout, get_json, post_json
 from .models import OutgoingResponse
 
 
+class PollingTimeout(RuntimeError):
+    pass
+
+
 class TelegramClient:
-    def __init__(self, token: str, timeout: int = 15):
+    def __init__(self, token: str, timeout: int = 15, send_photos: bool = False, send_typing: bool = False):
         self.base_url = f"https://api.telegram.org/bot{token}"
         self.timeout = timeout
+        self.send_photos = send_photos
+        self.send_typing = send_typing
 
     def get_updates(self, offset: int | None) -> list[dict[str, Any]]:
-        params = {"timeout": 30, "allowed_updates": '["message","callback_query"]'}
+        poll_timeout = 25
+        params = {"timeout": poll_timeout, "allowed_updates": '["message","callback_query"]'}
         if offset is not None:
             params["offset"] = offset
-        data = get_json(f"{self.base_url}/getUpdates", timeout=40, params=params)
+        try:
+            data = get_json(f"{self.base_url}/getUpdates", timeout=poll_timeout + 10, params=params)
+        except ReadTimeout as exc:
+            raise PollingTimeout(str(exc)) from exc
         if not data.get("ok"):
             raise RuntimeError(f"Telegram getUpdates failed: {data}")
         return data.get("result") or []
@@ -56,7 +66,7 @@ class TelegramClient:
             raise RuntimeError(f"Telegram sendPhoto failed: {data}")
 
     def send_response(self, chat_id: int, response: OutgoingResponse) -> None:
-        if response.photo_url:
+        if response.photo_url and self.send_photos:
             try:
                 self.send_photo(chat_id, response.photo_url, response.text, response.reply_markup)
                 return
@@ -97,6 +107,19 @@ class TelegramClient:
         data = post_json(f"{self.base_url}/answerCallbackQuery", payload, timeout=self.timeout)
         if not data.get("ok"):
             raise RuntimeError(f"Telegram answerCallbackQuery failed: {data}")
+
+    def set_webhook(self, url: str) -> None:
+        data = post_json(
+            f"{self.base_url}/setWebhook",
+            {
+                "url": url,
+                "allowed_updates": ["message", "callback_query"],
+                "drop_pending_updates": False,
+            },
+            timeout=self.timeout,
+        )
+        if not data.get("ok"):
+            raise RuntimeError(f"Telegram setWebhook failed: {data}")
 
 
 def split_message(text: str, limit: int = 3900) -> list[str]:

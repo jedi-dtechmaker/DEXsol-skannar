@@ -204,14 +204,8 @@ class RugCheckClient:
                 f"https://api.rugcheck.xyz/v1/tokens/{pair.base_address}/report/summary",
                 timeout=self.timeout,
             )
-        except Exception:
-            try:
-                data = get_json(
-                    f"https://api.rugcheck.xyz/v1/tokens/{pair.base_address}/report",
-                    timeout=self.timeout,
-                )
-            except Exception as exc:
-                return SecuritySummary(source="rugcheck", note=f"RugCheck unavailable: {exc}")
+        except Exception as exc:
+            return SecuritySummary(source="rugcheck", note=f"RugCheck unavailable: {exc}")
 
         risks: list[str] = []
         warnings: list[str] = []
